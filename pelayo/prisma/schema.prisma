@@ -1,0 +1,92 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Initial minimal model for health and baseline connectivity checks
+// Domain models (Customer, Conversation, Message, Vehicle, Document, Appointment) 
+// are introduced in their respective sprints (S3, S4, S5, S7).
+model SystemCheck {
+  id        String   @id @default(uuid())
+  checkedAt DateTime @default(now()) @map("checked_at")
+  status    String   @default("OK")
+
+  @@map("system_checks")
+}
+
+model InboundMessage {
+  id                String    @id @default(uuid())
+  externalMessageId String    @unique @map("external_message_id")
+  fromPhone         String    @map("from_phone")
+  messageType       String    @map("message_type")
+  content           String?   @db.Text
+  rawPayload        Json      @map("raw_payload")
+  status            String    @default("RECEIVED") // RECEIVED, PROCESSING, PROCESSED, IGNORED, FAILED, UNCERTAIN
+  responseSent      Boolean   @default(false) @map("response_sent")
+  responsePayload   String?   @map("response_payload") @db.Text
+  errorMessage      String?   @map("error_message") @db.Text
+  receivedAt        DateTime  @default(now()) @map("received_at")
+  processedAt       DateTime? @map("processed_at")
+  processingStartedAt DateTime? @map("processing_started_at")
+  claimToken        String?   @map("claim_token")
+  claimRecoveryCount Int      @default(0) @map("claim_recovery_count")
+  attempts          Int       @default(0)
+  maxAttempts       Int       @default(3) @map("max_attempts")
+  nextRetryAt       DateTime? @map("next_retry_at")
+  outboundMessageId String?   @map("outbound_message_id")
+  deliveryUncertain Boolean   @default(false) @map("delivery_uncertain")
+
+  sendAttempts      WhatsAppSendAttempt[]
+
+  @@index([fromPhone])
+  @@index([status])
+  @@index([status, nextRetryAt])
+  @@map("inbound_messages")
+}
+
+model WhatsAppSendAttempt {
+  id                  String         @id @default(uuid())
+  inboundMessageId    String         @map("inbound_message_id")
+  inboundMessage      InboundMessage @relation(fields: [inboundMessageId], references: [id], onDelete: Cascade)
+  attemptNumber       Int            @map("attempt_number")
+  claimToken          String         @map("claim_token")
+  status              String         // INITIATED, ACCEPTED, RETRYABLE_REJECTION, FATAL_FAILURE, UNCERTAIN
+  initiatedAt         DateTime       @default(now()) @map("initiated_at")
+  completedAt         DateTime?      @map("completed_at")
+  outboundMessageId   String?        @map("outbound_message_id")
+  responsePayload     String?        @map("response_payload") @db.Text
+  resultClassification String?       @map("result_classification")
+  errorMessage        String?        @map("error_message") @db.Text
+
+  @@index([inboundMessageId])
+  @@index([outboundMessageId])
+  @@index([status])
+  @@map("whatsapp_send_attempts")
+}
+
+model WhatsAppStatusEvent {
+  id                String    @id @default(uuid())
+  statusId          String    @unique @map("status_id")
+  externalMessageId String    @map("external_message_id") // outbound wamid returned by Meta
+  recipientId       String    @map("recipient_id")
+  status            String    // sent, delivered, read, failed
+  timestamp         String
+  rawPayload        Json      @map("raw_payload")
+  receivedAt        DateTime  @default(now()) @map("received_at")
+  reconciled        Boolean   @default(false)
+  reconcileAttempts Int       @default(0) @map("reconcile_attempts")
+  nextReconcileAt   DateTime? @default(now()) @map("next_reconcile_at")
+  lastError         String?   @map("last_error") @db.Text
+  abandoned         Boolean   @default(false)
+
+  @@index([externalMessageId])
+  @@index([recipientId])
+  @@index([reconciled, abandoned, nextReconcileAt])
+  @@map("whatsapp_status_events")
+}
+
+

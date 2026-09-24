@@ -1,0 +1,69 @@
+version: '3.8'
+
+# Configuración aislada de pruebas para S1.09 (puertos y volúmenes separados)
+services:
+  postgres_test:
+    image: postgres:16-alpine
+    container_name: pelayobot_test_postgres
+    restart: "no"
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_secret_isolated_pw
+      POSTGRES_DB: pelayodb_test
+    ports:
+      - "5433:5432"
+    volumes:
+      - pelayobot_test_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d pelayodb_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    networks:
+      - pelayonet_test
+
+  # Servicio efímero de migraciones: corre prisma migrate deploy antes de levantar el backend
+  migration_test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: pelayobot_test_migration
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://test_user:test_secret_isolated_pw@postgres_test:5432/pelayodb_test?schema=public
+    depends_on:
+      postgres_test:
+        condition: service_healthy
+    command: ["npx", "prisma", "migrate", "deploy"]
+    networks:
+      - pelayonet_test
+
+  backend_test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pelayobot_test_backend
+    restart: "no"
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://test_user:test_secret_isolated_pw@postgres_test:5432/pelayodb_test?schema=public
+    depends_on:
+      postgres_test:
+        condition: service_healthy
+      migration_test:
+        condition: service_completed_successfully
+    networks:
+      - pelayonet_test
+
+volumes:
+  pelayobot_test_postgres_data:
+    driver: local
+
+networks:
+  pelayonet_test:
+    driver: bridge
