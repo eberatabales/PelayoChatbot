@@ -1,0 +1,211 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        0
+      ],
+      "id": "69743414-b3e2-4613-94c8-53cbc92ac9fc",
+      "name": "Telegram Trigger",
+      "webhookId": "c0df3e47-d4ad-4f72-9487-6a4ba6aac728",
+      "credentials": {
+        "telegramApi": {
+          "id": "2J4UmAztTAXUq8qw",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"id_vehiculo_web\": {{ ($json.message?.text ?? '').match(/https?:\\/\\/(?:www\\.)?automovilespelayo\\.cl\\/vehiculos-en-venta\\/[a-zA-Z0-9-]+-([0-9]+)\\/?(?=$|[\\s?#.,!;)\\]])/)?.[1] ?? '' }}\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "c2a16b6b-db08-4348-baa6-e5ffdb81b7ea",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "d67d9f7a-fe5c-47d3-b0d6-18ab02f4ea02",
+              "leftValue": "={{ $json.id_vehiculo_web }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        448,
+        0
+      ],
+      "id": "cab16051-7b1c-4601-b8d6-a0d42af57e57",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=hola {{ $('Telegram Trigger').item.json.message.chat.first_name }}, el link que mandó no se encuentra en nuestra base de datos",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        672,
+        96
+      ],
+      "id": "fd222810-cd14-4d41-8040-94d692cc9b4b",
+      "name": "Send a text message",
+      "webhookId": "0ee6ff94-573c-486d-ba7e-dab85967812c",
+      "credentials": {
+        "telegramApi": {
+          "id": "2J4UmAztTAXUq8qw",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    entrada.id_vehiculo_web,\n    (v.id IS NOT NULL) AS vehiculo_existe,\n    v.codigo_stock,\n    v.marca,\n    v.modelo,\n    v.anio_modelo,\n    v.precio,\n    v.moneda,\n    v.estado,\n    v.url_ficha_tecnica\nFROM (\n    SELECT $1::text AS id_vehiculo_web\n) AS entrada\nLEFT JOIN pelayobot.vehiculos AS v\n    ON v.id_vehiculo_web = entrada.id_vehiculo_web;",
+        "options": {
+          "queryReplacement": "={{ [$json.id_vehiculo_web] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        672,
+        -96
+      ],
+      "id": "3b144ec0-9adc-4fea-8546-a341928d815d",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "9KYjUtnHaqvU41kS",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.name }}{{ $json.code }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        -48
+      ],
+      "id": "f93ad6a5-3234-44fc-98aa-6eb4e155caca",
+      "name": "Send a text message1",
+      "webhookId": "aee8907c-ef98-4e30-bdbe-626716b87fdc",
+      "credentials": {
+        "telegramApi": {
+          "id": "2J4UmAztTAXUq8qw",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "fa62f6c9-4d55-4397-9422-af61c55519a0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1b364f82f9ec355426cc3c78c5bf19895a9899e2ab3038902701203de43a446a"
+  },
+  "nodeGroups": [],
+  "id": "f4wb6YGnqiyCJAZU",
+  "tags": []
+}
